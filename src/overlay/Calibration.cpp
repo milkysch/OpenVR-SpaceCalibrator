@@ -312,11 +312,17 @@ void ScanAndApplyProfile(CalibrationContext &ctx)
 				}
 			}
 
+			// Don't require the HMD to match the reference tracking system
+			// This allows using a tracker (generic or otherwise) as a reference
+			// while having a different tracking system's HMD
+			
+			/*
 			if (trackingSystem != ctx.referenceTrackingSystem)
 			{
 				// Currently using an HMD with a different tracking system than the calibration.
 				ctx.enabled = false;
 			}
+			*/
 
 			ResetAndDisableOffsets(id);
 			continue;
@@ -432,15 +438,43 @@ void CalibrationTick(double time)
 		}
 	});
 
-	// check for non-updating headset tracking space (caused by quest out of bounds or taken off head for example) and abort everything for this tick
-	auto p = ctx.devicePoses[vr::k_unTrackedDeviceIndex_Hmd].vecPosition;
-	if ((p[0] == 0.0 && p[1] == 0.0 && p[2] == 0.0) || (ctx.xprev == p[0] && ctx.yprev == p[1] && ctx.zprev == p[2])) {
-		// std::cerr << "HMD tracking didn't update, skipping update" << std::endl;
+	// Check for non-updating tracking - use either HMD or reference device position updates
+	bool validPoseUpdate = false;
+
+	// First try using the HMD pose if available
+	auto pHmd = ctx.devicePoses[vr::k_unTrackedDeviceIndex_Hmd].vecPosition;
+	bool hmdValid = !(pHmd[0] == 0.0 && pHmd[1] == 0.0 && pHmd[2] == 0.0) && 
+	               !(ctx.xprev == pHmd[0] && ctx.yprev == pHmd[1] && ctx.zprev == pHmd[2]);
+	
+	// If HMD is invalid but we have a reference device, use it instead
+	if (!hmdValid && ctx.referenceID >= 0 && ctx.referenceID < vr::k_unMaxTrackedDeviceCount && 
+	    ctx.referenceID != vr::k_unTrackedDeviceIndex_Hmd) {
+		auto pRef = ctx.devicePoses[ctx.referenceID].vecPosition;
+		validPoseUpdate = !(pRef[0] == 0.0 && pRef[1] == 0.0 && pRef[2] == 0.0) &&
+		                  ctx.devicePoses[ctx.referenceID].poseIsValid;
+		
+		// Update our "previous" values for next frame comparison
+		if (validPoseUpdate) {
+			ctx.xprev = (float)pRef[0];
+			ctx.yprev = (float)pRef[1];
+			ctx.zprev = (float)pRef[2];
+		}
+	} else {
+		// Use HMD pose result
+		validPoseUpdate = hmdValid;
+		
+		// Update our "previous" values for next frame comparison
+		if (validPoseUpdate) {
+			ctx.xprev = (float)pHmd[0];
+			ctx.yprev = (float)pHmd[1];
+			ctx.zprev = (float)pHmd[2];
+		}
+	}
+	
+	// Skip this update if no valid pose was detected
+	if (!validPoseUpdate) {
 		return;
 	}
-	ctx.xprev = (float) p[0];
-	ctx.yprev = (float) p[1];
-	ctx.zprev = (float) p[2];
 
 	if (ctx.state == CalibrationState::None || ctx.state == CalibrationState::ContinuousStandby
 		|| (ctx.state == CalibrationState::Continuous && !calibration.isValid()))

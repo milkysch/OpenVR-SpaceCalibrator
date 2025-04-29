@@ -505,7 +505,7 @@ void BuildMenu(bool runningInOverlay)
 	{
 		if (CalCtx.validProfile && !CalCtx.enabled)
 		{
-			ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1), "Reference (%s) HMD not detected, profile disabled", GetPrettyTrackingSystemName(CalCtx.referenceTrackingSystem));
+			ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1), "Reference device (%s) not detected, profile disabled", GetPrettyTrackingSystemName(CalCtx.referenceTrackingSystem));
 			ImGui::Text("");
 		}
 
